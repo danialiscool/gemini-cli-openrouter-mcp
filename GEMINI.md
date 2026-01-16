@@ -8,11 +8,22 @@ This extension provides tools to interact with models hosted on OpenRouter. It i
 Lists available models on OpenRouter. 
 - Use `free: true` to find models that don't require credits.
 - Use `query: "name"` to search for specific model families (e.g., "llama", "deepseek").
+- Use `forceRefresh: true` to bypass the local cache.
+
+**Example Tool Call:**
+```json
+{ "free": true, "query": "llama" }
+```
 
 ### `prompt`
 Sends a prompt to a specific model.
 - Requires a `modelId` (e.g., `meta-llama/llama-3.1-405b-instruct:free`).
 - Useful for specialized reasoning tasks or when the user explicitly requests a different model.
+
+**Example Tool Call:**
+```json
+{ "modelId": "openai/o1-mini", "prompt": "Analyze this code for security flaws..." }
+```
 
 ## Best Practices
 - **Cost Awareness**: Always prefer `:free` models unless high-reasoning or specific capabilities of a paid model are required.

@@ -1,7 +1,8 @@
 {
   "name": "openrouter-mcp",
-  "version": "1.0.0",
-  "description": "Interact with 200+ AI models via OpenRouter",
+  "version": "1.1.0",
+  "description": "Production-grade access to 200+ AI models via OpenRouter with resilient caching and error handling.",
+  "keywords": ["ai", "llm", "openrouter", "mcp", "models"],
   "mcpServers": {
     "openrouter": {
       "command": "npx",

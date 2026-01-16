@@ -4,13 +4,24 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import fs from "fs";
+import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_FILE = path.join(__dirname, ".models-cache.json");
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Input Validation
+const MAX_PROMPT_LENGTH = 15000;
+function validateInput(modelId: string, prompt: string) {
+  if (!modelId || typeof modelId !== "string" || modelId.length > 255) {
+    throw new Error("Invalid or missing modelId");
+  }
+  if (!prompt || typeof prompt !== "string" || prompt.length > MAX_PROMPT_LENGTH) {
+    throw new Error(`Prompt must be a string between 1 and ${MAX_PROMPT_LENGTH} characters`);
+  }
+}
 
 /**
  * Note: The Gemini CLI extension system handles the API_KEY injection 
@@ -44,24 +55,27 @@ interface OpenRouterResponse {
 }
 
 // Persistent cache helper
-function getCachedModels(): OpenRouterModel[] | null {
+async function getCachedModels(): Promise<OpenRouterModel[] | null> {
   try {
-    if (fs.existsSync(CACHE_FILE)) {
-      const stats = fs.statSync(CACHE_FILE);
-      const now = Date.now();
-      if (now - stats.mtimeMs < CACHE_TTL) {
-        return JSON.parse(fs.readFileSync(CACHE_FILE, "utf-8"));
-      }
+    const stats = await fs.stat(CACHE_FILE);
+    const now = Date.now();
+    if (now - stats.mtimeMs < CACHE_TTL) {
+      const data = await fs.readFile(CACHE_FILE, "utf-8");
+      return JSON.parse(data);
     }
   } catch (error) {
-    console.error("Cache read error:", error);
+    // If file doesn't exist, ignore. If corrupted, delete it.
+    if ((error as any).code !== "ENOENT") {
+      console.error("Cache read error (possibly corrupted):", error);
+      try { await fs.unlink(CACHE_FILE); } catch {}
+    }
   }
   return null;
 }
 
-function setCachedModels(models: OpenRouterModel[]) {
+async function setCachedModels(models: OpenRouterModel[]) {
   try {
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(models));
+    await fs.writeFile(CACHE_FILE, JSON.stringify(models));
   } catch (error) {
     console.error("Cache write error:", error);
   }
@@ -79,30 +93,46 @@ const server = new Server(
   }
 );
 
-async function fetchWithRetry(url: string, options: RequestInit = {}): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000); // 30s safety rail
+async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 2): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000); // 30s safety rail
 
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        "HTTP-Referer": "https://geminicli.com",
-        "X-Title": "Gemini CLI OpenRouter Extension",
-        ...options.headers,
-      },
-    });
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          "HTTP-Referer": "https://geminicli.com",
+          "X-Title": "Gemini CLI OpenRouter Extension",
+          ...options.headers,
+        },
+      });
 
-    if (response.status === 429) {
-      const retryAfter = response.headers.get("Retry-After") || "10";
-      throw new Error(`Rate limited by OpenRouter. Please wait ${retryAfter} seconds.`);
+      if (response.status === 429) {
+        const retryAfter = response.headers.get("Retry-After") || "10";
+        throw new Error(`Rate limited by OpenRouter. Please wait ${retryAfter} seconds.`);
+      }
+
+      // Retry on 5xx errors
+      if (response.status >= 500 && attempt < retries) {
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      return response;
+    } catch (error: any) {
+      if (attempt === retries || error.name === "AbortError" || response?.status === 429) {
+        throw error;
+      }
+      const delay = Math.pow(2, attempt) * 1000;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return response;
-  } finally {
-    clearTimeout(timeout);
   }
+  throw new Error("Fetch failed after retries");
 }
 
 /**
@@ -124,6 +154,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             query: {
               type: "string",
               description: "Filter models by name or ID",
+            },
+            forceRefresh: {
+              type: "boolean",
+              description: "Bypass cache and fetch fresh model list",
             },
           },
         },
@@ -158,7 +192,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     if (name === "list_models") {
-      let models = getCachedModels();
+      let models = args?.forceRefresh ? null : await getCachedModels();
 
       if (!models) {
         const response = await fetchWithRetry("https://openrouter.ai/api/v1/models");
@@ -169,7 +203,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const json = await response.json() as OpenRouterResponse;
         models = json.data || [];
-        setCachedModels(models);
+        await setCachedModels(models);
       }
 
       let filteredModels = [...models];
@@ -184,16 +218,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
       }
 
-      // Format as readable table for CLI
-      const table = filteredModels
-        .map((m) => `${m.id.padEnd(50)} | ${m.name}`)
+      // Format as Markdown table for CLI
+      const header = "| Model ID | Tier | Name |\n| :--- | :--- | :--- |";
+      const rows = filteredModels
+        .map((m) => {
+          const tier = m.id.endsWith(":free") ? "Free" : "Paid";
+          return `| \`${m.id}\` | ${tier} | ${m.name} |`;
+        })
         .join("\n");
 
       return {
         content: [
           {
             type: "text",
-            text: table || "No models found matching criteria.",
+            text: filteredModels.length > 0 ? `${header}\n${rows}` : "No models found matching criteria.",
           },
         ],
       };
@@ -201,10 +239,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     if (name === "prompt") {
       const { modelId, prompt } = args as { modelId: string; prompt: string };
-
-      if (!modelId || !prompt) {
-        throw new Error("Missing modelId or prompt");
-      }
+      validateInput(modelId, prompt);
 
       const response = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
