@@ -1,19 +1,19 @@
 {
-    "version":  "1.0.0",
-    "dependencies":  {
-                         "@modelcontextprotocol/sdk":  "^1.0.0",
-                         "dotenv":  "^16.4.0"
-                     },
-    "name":  "gemini-cli-openrouter-mcp",
-    "type":  "module",
-    "description":  "OpenRouter MCP server for Gemini CLI",
-    "scripts":  {
-                    "start":  "ts-node --esm index.ts"
-                },
-    "devDependencies":  {
-                            "ts-node":  "^10.9.2",
-                            "typescript":  "^5.0.0",
-                            "@types/node":  "^20.0.0"
-                        },
-    "main":  "index.js"
+    "version": "1.1.0",
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.0.0",
+        "dotenv": "^16.4.0"
+    },
+    "name": "gemini-cli-openrouter-mcp",
+    "type": "module",
+    "description": "OpenRouter MCP server for Gemini CLI",
+    "scripts": {
+        "start": "ts-node --esm openrouter-mcp.ts"
+    },
+    "devDependencies": {
+        "ts-node": "^10.9.2",
+        "typescript": "^5.0.0",
+        "@types/node": "^20.0.0"
+    },
+    "main": "openrouter-mcp.js"
 }
