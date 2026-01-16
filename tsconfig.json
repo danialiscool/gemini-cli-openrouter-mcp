@@ -1,0 +1,14 @@
+{
+    "include":  [
+                    "index.ts"
+                ],
+    "compilerOptions":  {
+                            "skipLibCheck":  true,
+                            "outDir":  "./dist",
+                            "moduleResolution":  "Node",
+                            "esModuleInterop":  true,
+                            "module":  "ESNext",
+                            "forceConsistentCasingInFileNames":  true,
+                            "target":  "ESNext"
+                        }
+}
