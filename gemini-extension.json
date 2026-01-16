@@ -1,0 +1,24 @@
+{
+  "name": "openrouter-mcp",
+  "version": "1.0.0",
+  "description": "Interact with 200+ AI models via OpenRouter",
+  "mcpServers": {
+    "openrouter": {
+      "command": "npx",
+      "args": [
+        "ts-node",
+        "--esm",
+        "openrouter-mcp.ts"
+      ]
+    }
+  },
+  "contextFileName": "GEMINI.md",
+  "settings": [
+    {
+      "name": "OpenRouter API Key",
+      "description": "Your API key from openrouter.ai",
+      "envVar": "OPENROUTER_API_KEY",
+      "sensitive": true
+    }
+  ]
+}
