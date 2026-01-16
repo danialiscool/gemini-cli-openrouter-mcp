@@ -60,7 +60,11 @@ gemini extension configure openrouter-mcp
 Requires Node.js and TypeScript (`ts-node`).
 
 ```bash
+
 npm install
+
 # Run server via stdio
-npx ts-node --esm index.ts
+
+npx ts-node --esm openrouter-mcp.ts
+
 ```

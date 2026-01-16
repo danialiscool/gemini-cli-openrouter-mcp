@@ -19,6 +19,7 @@ Lists available models on OpenRouter.
 Sends a prompt to a specific model.
 - Requires a `modelId` (e.g., `meta-llama/llama-3.1-405b-instruct:free`).
 - Useful for specialized reasoning tasks or when the user explicitly requests a different model.
+- **Limitation**: Currently only supports basic single-turn chat completions (no streaming, vision, or conversation history).
 
 **Example Tool Call:**
 ```json
